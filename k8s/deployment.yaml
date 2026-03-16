@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: bala123reg.azurecr.io/bala/server:v2
+        image: server-api
         ports:
         - containerPort: 8080
         env:
@@ -58,7 +58,7 @@ spec:
     spec:
       containers:
       - name: ui
-        image: bala123reg.azurecr.io/bala/client-app:latest
+        image: client-app
         ports:
         - containerPort: 80
 ---

@@ -1,84 +1,88 @@
 trigger:
-    branches:
-      include:
-        - feature/app-deployment
-  pool:
-    name: 'bala-poc'
+  branches:
+    include:
+      - feature/app-deployment
 
-  variables:
-    buildConfiguration: 'Release'
-    azureSubscription: 'aks-dev'
-    aksclustername: "dev-bcc-aks"
-    k8sNamespace: 'default'
-    imagePullSecretName: 'acr-pull'
-    acrLoginServer: 'bala123reg.azurecr.io'
-    dockerRegistryServiceConnection: "docker-dev"
-    imageRepository: 'server-api'
-    tag: '$(Build.BuildId)'
+pool:
+  name: 'bala-poc'
 
-  stages:
-    - stage: Build
-      displayName: 'Build and Push Stage'
-      jobs:
-      - job: BuildJob
-        displayName: 'Build and Push Docker Image'
-        steps:
-        - task: UseDotNet@2
-          inputs:
-            packageType: 'sdk'
-            version: '8.x'
-        - script: |
-            echo "Listing server.api content..."
-            ls -la $(Build.SourcesDirectory)/server.api
-          displayName: 'Debug: list server.api directory'
-        - task: Docker@2
-          displayName: 'Build and Push API'
-          inputs:
-           containerRegistry: 'ACR-Docker-Connection'
-           repository: 'server-api'
-           command: 'buildAndPush'
-           Dockerfile: 'server.api/Dockerfile'
-           buildContext: '$(Build.SourcesDirectory)/server.api'
-           tags: |
-             $(tag)
+variables:
+  buildConfiguration: 'Release'
+  azureSubscription: 'aks-dev'
+  aksclustername: "dev-bcc-aks"
+  k8sNamespace: 'default'
+  imagePullSecretName: 'acr-pull'
+  acrLoginServer: 'bala123reg.azurecr.io'
+  dockerRegistryServiceConnection: "docker-dev"
+  tag: '$(Build.BuildId)'
 
-        - task: Docker@2
-          displayName: 'Build and Push'
-          inputs:
-            containerRegistry: 'dev-docker'
-            repository: 'client-app'
-            command: 'buildAndPush'
-            Dockerfile: 'client-app/Dockerfile'
-            buildContext: '$(Build.SourcesDirectory)/client-app'
-            tags: |
-              $(tag)
+stages:
+- stage: Build
+  displayName: 'Build and Push Stage'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build and Push Docker Image'
+    steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
 
-    - stage: Deploy
-      displayName: 'Deploy to Dev'
-      dependsOn: Build
-      jobs:
-      - job: DeployToAKS
-        steps:
-        
-          - task: KubernetesManifest@1
-            displayName: 'Create ACR imagePullSecret'
-            inputs:
-              action: 'createSecret'
-              kubernetesServiceConnection: '$(azureSubscription)'
-              namespace: '$(k8sNamespace)'
-              secretName: '$(imagePullSecretName)'
-              dockerRegistryEndpoint: '$(dockerRegistryServiceConnection)'
+    - task: Docker@2
+      displayName: 'Build and Push API'
+      inputs:
+        containerRegistry: 'ACR-Docker-Connection'
+        repository: 'server-api'
+        command: 'buildAndPush'
+        Dockerfile: 'server.api/Dockerfile'
+        buildContext: '$(Build.SourcesDirectory)'
+        tags: |
+          $(tag)
 
-          - task: KubernetesManifest@1
-            displayName: 'Deploy to AKS'
-            inputs:
-              action: 'deploy'
-              kubernetesServiceConnection: 'Aks_Service_Connection'
-              namespace: '$(k8sNamespace)'
-              manifests: |
-                $(System.DefaultWorkingDirectory)/deployment.yaml
-              imagePullSecrets: |
-                $(imagePullSecretName)
-              containers: |
-                $(acrLoginServer)/server-api:$(tag)
-                $(acrLoginServer)/client-app:$(tag)
+    - task: Docker@2
+      displayName: 'Build and Push Client'
+      inputs:
+        containerRegistry: 'dev-docker'
+        repository: 'client-app'
+        command: 'buildAndPush'
+        Dockerfile: 'client-app/Dockerfile'
+        buildContext: '$(Build.SourcesDirectory)'
+        tags: |
+          $(tag)
+
+    # Critical: Pass the manifest to the next stage
+    - publish: $(System.DefaultWorkingDirectory)/deployment.yaml
+      artifact: manifests
+
+- stage: Deploy
+  displayName: 'Deploy to Dev'
+  dependsOn: Build
+  jobs:
+  - job: DeployToAKS
+    steps:
+    # Download the manifest published in the Build stage
+    - download: current
+      artifact: manifests
+
+    - task: KubernetesManifest@1
+      displayName: 'Create ACR imagePullSecret'
+      inputs:
+        action: 'createSecret'
+        kubernetesServiceConnection: '$(azureSubscription)'
+        namespace: '$(k8sNamespace)'
+        secretName: '$(imagePullSecretName)'
+        dockerRegistryEndpoint: '$(dockerRegistryServiceConnection)'
+
+    - task: KubernetesManifest@1
+      displayName: 'Deploy to AKS'
+      inputs:
+        action: 'deploy'
+        kubernetesServiceConnection: '$(azureSubscription)' # Ensure this matches your secret task
+        namespace: '$(k8sNamespace)'
+        manifests: |
+          $(Pipeline.Workspace)/manifests/deployment.yaml
+        imagePullSecrets: |
+          $(imagePullSecretName)
+        containers: |
+          $(acrLoginServer)/server-api:$(tag)
+          $(acrLoginServer)/client-app:$(tag)

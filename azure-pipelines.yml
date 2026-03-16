@@ -13,7 +13,7 @@ trigger:
     imagePullSecretName: 'acr-pull'
     acrLoginServer: 'bala123reg.azurecr.io'
     dockerRegistryServiceConnection: "dev-docker"
-    imageRepository: 'server-api'
+    imageRepository: 'bala'
     tag: '$(Build.BuildId)'
 
   stages:

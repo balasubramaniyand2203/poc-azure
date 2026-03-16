@@ -1,0 +1,75 @@
+# --- 1. BACKEND: .NET API ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-api
+  labels:
+    app: weather-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weather-api
+  template:
+    metadata:
+      labels:
+        app: weather-api
+    spec:
+      containers:
+      - name: api
+        image: bala123reg.azurecr.io/bala/server:v1
+        ports:
+        - containerPort: 8080
+        env:
+        # FIXED: Using MySQL format, port 3306, and the Password1234! from Terraform
+        - name: ConnectionStrings__DefaultConnection
+          value: "Server=my-mysql-server.mysql.database.azure.com;Port=3306;Database=techdb;Uid=mysqladmin;Pwd=Password1234!;SslMode=Required;"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weather-api-svc
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: weather-api
+  type: LoadBalancer # FIXED: Must be LoadBalancer so the React app can reach it from the browser
+---
+# --- 2. FRONTEND: REACT (VITE) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-ui
+  labels:
+    app: weather-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weather-ui
+  template:
+    metadata:
+      labels:
+        app: weather-ui
+    spec:
+      containers:
+      - name: ui
+        image: bala123reg.azurecr.io/bala/client-app:latest
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weather-ui-svc
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+  selector:
+    app: weather-ui
+  type: LoadBalancer

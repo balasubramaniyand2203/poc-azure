@@ -12,7 +12,7 @@ trigger:
     k8sNamespace: 'default'
     imagePullSecretName: 'acr-pull'
     acrLoginServer: 'bala123reg.azurecr.io'
-    dockerRegistryServiceConnection: "dev-docker"
+    dockerRegistryServiceConnection: "docker-dev"
     imageRepository: 'server-api'
     tag: '$(Build.BuildId)'
 

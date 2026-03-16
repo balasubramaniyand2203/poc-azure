@@ -53,7 +53,7 @@ stages:
               tags: |
                 $(tag)
 
-          - # Update the path to include the k8s folder
+           # Update the path to include the k8s folder
           - publish: $(System.DefaultWorkingDirectory)/k8s/deployment.yaml
             artifact: manifests
 

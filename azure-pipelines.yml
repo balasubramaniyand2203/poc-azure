@@ -1,65 +1,71 @@
 trigger:
-    branches:
-      include:
-        - feature/app-deployment
-  pool:
-    name: 'bala-poc'
+  branches:
+    include:
+      - feature/app-deployment
 
-  variables:
-    buildConfiguration: 'Release'
-    azureSubscription: 'aks-dev'
-    aksclustername: "dev-bcc-aks"
-    k8sNamespace: 'default'
-    imagePullSecretName: 'acr-pull'
-    acrLoginServer: 'bala123reg.azurecr.io'
-    dockerRegistryServiceConnection: "dev-docker"
-    imageRepository: 'server-api'
-    tag: '$(Build.BuildId)'
+pool:
+  name: 'bala-poc'
 
-  stages:
-    - stage: Build
-      displayName: 'Build and Push Stage'
-      jobs:
+variables:
+  buildConfiguration: 'Release'
+  azureSubscription: 'aks-dev'
+  aksclustername: "dev-bcc-aks"
+  k8sNamespace: 'default'
+  imagePullSecretName: 'acr-pull'
+  acrLoginServer: 'bala123reg.azurecr.io'
+  dockerRegistryServiceConnection: 'docker-dev' # Matches your screenshot
+  tag: '$(Build.BuildId)'
+
+stages:
+  - stage: Build
+    displayName: 'Build and Push Stage'
+    jobs:
       - job: BuildJob
         displayName: 'Build and Push Docker Image'
         steps:
-        - task: UseDotNet@2
-          inputs:
-            packageType: 'sdk'
-            version: '8.x'
-        - script: |
-            echo "Listing server.api content..."
-            ls -la $(Build.SourcesDirectory)/server.api
-          displayName: 'Debug: list server.api directory'
-        - task: Docker@2
-          displayName: 'Build and Push API'
-          inputs:
-           containerRegistry: 'ACR-Docker-Connection'
-           repository: 'server-api'
-           command: 'buildAndPush'
-           Dockerfile: 'server.api/Dockerfile'
-           buildContext: '$(Build.SourcesDirectory)/server.api'
-           tags: |
-             $(tag)
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '8.x'
 
-        - task: Docker@2
-          displayName: 'Build and Push'
-          inputs:
-            containerRegistry: 'dev-docker'
-            repository: 'client-app'
-            command: 'buildAndPush'
-            Dockerfile: 'client-app/Dockerfile'
-            buildContext: '$(Build.SourcesDirectory)/client-app'
-            tags: |
-              $(tag)
+          - task: Docker@2
+            displayName: 'Build and Push API'
+            inputs:
+              containerRegistry: '$(dockerRegistryServiceConnection)'
+              repository: 'server-api'
+              command: 'buildAndPush'
+              # Fixed path based on your 'ls' command
+              Dockerfile: 'src/server-api/Dockerfile' 
+              buildContext: '$(Build.SourcesDirectory)'
+              tags: |
+                $(tag)
 
-    - stage: Deploy
-      displayName: 'Deploy to Dev'
-      dependsOn: Build
-      jobs:
+          - task: Docker@2
+            displayName: 'Build and Push Client'
+            inputs:
+              containerRegistry: '$(dockerRegistryServiceConnection)'
+              repository: 'client-app'
+              command: 'buildAndPush'
+              # Adjusting to src/ path as well
+              Dockerfile: 'src/client-app/Dockerfile' 
+              buildContext: '$(Build.SourcesDirectory)'
+              tags: |
+                $(tag)
+
+          # Move the manifest to the next stage
+          - publish: $(System.DefaultWorkingDirectory)/deployment.yaml
+            artifact: manifests
+
+  - stage: Deploy
+    displayName: 'Deploy to Dev'
+    dependsOn: Build
+    jobs:
       - job: DeployToAKS
         steps:
-        
+          # Download the manifest published in Build
+          - download: current
+            artifact: manifests
+
           - task: KubernetesManifest@1
             displayName: 'Create ACR imagePullSecret'
             inputs:
@@ -73,10 +79,10 @@ trigger:
             displayName: 'Deploy to AKS'
             inputs:
               action: 'deploy'
-              kubernetesServiceConnection: 'Aks_Service_Connection'
+              kubernetesServiceConnection: '$(azureSubscription)'
               namespace: '$(k8sNamespace)'
               manifests: |
-                $(System.DefaultWorkingDirectory)/deployment.yaml
+                $(Pipeline.Workspace)/manifests/deployment.yaml
               imagePullSecrets: |
                 $(imagePullSecretName)
               containers: |

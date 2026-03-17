@@ -21,7 +21,7 @@ function App() {
 
   return (
     <div style={{ padding: '40px', fontFamily: 'Arial, sans-serif', textAlign: 'center' }}>
-      <h1 style={{ color: '#0078d4' }}>Technophile Weather bala </h1>
+      <h1 style={{ color: '#0078d4' }}>Technophile Weather iopex </h1>
       <p style={{ color: '#666' }}>Infrastructure: AKS (South India) | DB: Azure SQL (Central India)</p>
       
       {error && (
